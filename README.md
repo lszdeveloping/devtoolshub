@@ -1,6 +1,6 @@
 # DevTools Hub
 
-[![Release](https://img.shields.io/github/v/release/lszdeveloping/devtoolshub?label=release)](https://github.com/lszdeveloping/devtoolshub/releases/tag/v1.0)
+[![Release](https://img.shields.io/github/v/release/lszdeveloping/devtoolshub?label=release)](https://github.com/lszdeveloping/devtoolshub/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-111827)](#platform-support)
 
