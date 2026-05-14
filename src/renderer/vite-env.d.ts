@@ -1,12 +1,11 @@
 /// <reference types="vite/client" />
 
-import type { Tool, ToolState, InstallResult, InstallProgress, Platform } from '../shared/types'
+import type { Tool, ToolState, InstallResult, InstallProgress } from '../shared/types'
 
 interface ElectronAPI {
   minimize: () => void
   maximize: () => void
   close: () => void
-  getPlatform: () => Promise<Platform>
   getVersion: () => Promise<string>
   openUrl: (url: string) => void
   listTools: () => Promise<Tool[]>
@@ -15,6 +14,8 @@ interface ElectronAPI {
   uninstallTool: (toolId: string) => Promise<InstallResult>
   onProgress: (cb: (p: InstallProgress) => void) => () => void
   exportConfig: (toolIds: string[]) => Promise<string>
+  openLogFile: (logPath: string) => void
+  getInstallLogs: () => Promise<{ name: string; path: string }[]>
   configureRtk: (agents: string[]) => Promise<{ success: boolean; results: { agent: string; success: boolean; error?: string }[] }>
 }
 

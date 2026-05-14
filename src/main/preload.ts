@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Tool, ToolState, InstallResult, InstallProgress, Platform } from '../shared/types'
+import type { Tool, ToolState, InstallResult, InstallProgress } from '../shared/types'
 
 contextBridge.exposeInMainWorld('api', {
   // Window
@@ -8,7 +8,6 @@ contextBridge.exposeInMainWorld('api', {
   close: () => ipcRenderer.send('window:close'),
 
   // App
-  getPlatform: (): Promise<Platform> => ipcRenderer.invoke('app:platform'),
   getVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
   openUrl: (url: string) => ipcRenderer.send('app:openUrl', url),
 

@@ -1,21 +1,39 @@
 #Requires -RunAsAdministrator
-# Apache addon for WampServer  -  downloads from wampserver.aviatechno.net
-Write-Host "Installing Apache 2.4.67 addon for WampServer..."
+$ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$wampDir = "C:\wamp64"
-if (-not (Test-Path "$wampDir\wampmanager.exe")) {
-  Write-Error "WampServer must be installed first at C:\wamp64"
-  exit 1
+# Source: aviatechno.net WampServer Apache addons
+# https://wampserver.aviatechno.net/index.php?affiche=addons&lang=en
+Write-Host "Installing Apache addon for WampServer..."
+
+$wampDir = 'C:\wamp64'
+if (-not (Test-Path (Join-Path $wampDir 'wampmanager.exe'))) {
+  throw "WampServer must be installed first at $wampDir"
 }
 
-$url  = "https://wampserver.aviatechno.net/files/apache/apache2.4.67-x64.zip"
-$zip  = "$env:TEMP\apache2.4.67-x64.zip"
+function Resolve-ApacheAddonUrl {
+  $fallback = 'https://wampserver.aviatechno.net/files/apache/wampserver3_addon_apache2.4.67_fcgi_x64.exe'
+  try {
+    $base = [Uri]'https://wampserver.aviatechno.net/index.php?affiche=addons&lang=en'
+    $html = (Invoke-WebRequest -Uri $base.AbsoluteUri -UseBasicParsing -TimeoutSec 20).Content
+    $matches = [regex]::Matches($html, 'href="([^"]*wampserver3(?:_x64)?_addon_apache[\d.]+(?:_fcgi)?(?:_x64)?\.exe)"', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if ($matches.Count -gt 0) {
+      $href = $matches[$matches.Count - 1].Groups[1].Value
+      return [Uri]::new($base, $href).AbsoluteUri
+    }
+  } catch {
+    Write-Warning "Could not detect latest Apache addon automatically: $_"
+  }
+  return $fallback
+}
 
-Write-Host "Downloading Apache 2.4.67 addon..."
-Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+$url = Resolve-ApacheAddonUrl
+$installer = Join-Path $env:TEMP 'wamp-apache-addon.exe'
+Write-Host "Downloading Apache addon..."
+Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
 
-Write-Host "Extracting..."
-Expand-Archive -Path $zip -DestinationPath "$wampDir\bin\apache" -Force
-Remove-Item $zip -ErrorAction SilentlyContinue
+Write-Host "Launching Apache addon installer - follow the wizard..."
+Start-Process -FilePath $installer -Wait
+Remove-Item $installer -Force -ErrorAction SilentlyContinue
 
-Write-Host "Apache 2.4.67 addon installed. Restart WampServer to activate."
+Write-Host "Apache addon installed. Restart WampServer to activate."

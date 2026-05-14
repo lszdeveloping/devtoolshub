@@ -1,36 +1,34 @@
 import { NavLink } from 'react-router-dom'
 import { useTools } from '../store/ToolContext'
+import { NAV_ICONS } from './icons'
 
 const navItems = [
-  { to: '/',          icon: '🏠', label: 'Home' },
-  { to: '/installer', icon: '📦', label: 'Installer' },
-  { to: '/dashboard', icon: '📊', label: 'Dashboard' },
-  { to: '/settings',  icon: '⚙️', label: 'Settings' },
+  { to: '/', icon: NAV_ICONS.home, label: 'Home' },
+  { to: '/installer', icon: NAV_ICONS.installer, label: 'Installer' },
+  { to: '/dashboard', icon: NAV_ICONS.dashboard, label: 'Dashboard' },
+  { to: '/settings', icon: NAV_ICONS.settings, label: 'Settings' },
 ]
 
 export default function Sidebar() {
   const { tools, getState } = useTools()
 
-  const installed = tools.filter(t => getState(t.id).status === 'installed').length
-  const updates   = tools.filter(t => getState(t.id).status === 'outdated').length
+  const installed = tools.filter((t) => getState(t.id).status === 'installed').length
+  const updates = tools.filter((t) => getState(t.id).status === 'outdated').length
 
   return (
     <aside className="w-56 flex-shrink-0 bg-surface-900 border-r border-surface-700 flex flex-col">
       <nav className="flex-1 p-2 space-y-1 pt-3">
-        {navItems.map(item => (
+        {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.to === '/'}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-               ${isActive
-                 ? 'bg-primary-600 text-white'
-                 : 'text-slate-400 hover:text-slate-100 hover:bg-surface-800'
-               }`
+               ${isActive ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-slate-100 hover:bg-surface-800'}`
             }
           >
-            <span className="text-base">{item.icon}</span>
+            <item.icon className="h-4 w-4" />
             {item.label}
           </NavLink>
         ))}
@@ -40,7 +38,9 @@ export default function Sidebar() {
         <div className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-2">Status</div>
         <div className="flex justify-between text-xs">
           <span className="text-slate-400">Installed</span>
-          <span className="text-emerald-400 font-semibold">{installed}/{tools.length}</span>
+          <span className="text-emerald-400 font-semibold">
+            {installed}/{tools.length}
+          </span>
         </div>
         {updates > 0 && (
           <div className="flex justify-between text-xs">

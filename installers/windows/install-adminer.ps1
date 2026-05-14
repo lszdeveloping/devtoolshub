@@ -1,23 +1,40 @@
 #Requires -RunAsAdministrator
-Write-Host "Installing Adminer (WampServer addon or standalone)..."
+$ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$wampDir = "C:\wamp64"
-$isWamp  = Test-Path "$wampDir\wampmanager.exe"
+# Source: aviatechno.net WampServer Adminer applications
+# https://wampserver.aviatechno.net/index.php?affiche=addons&lang=en
+Write-Host "Installing Adminer addon for WampServer..."
 
-if ($isWamp) {
-  Write-Host "WampServer detected  -  installing Adminer 4.8.1 as addon..."
-  $url = "https://wampserver.aviatechno.net/files/adminer/adminer4.8.1.zip"
-  $zip = "$env:TEMP\adminer4.8.1.zip"
-  Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
-  Expand-Archive -Path $zip -DestinationPath "$wampDir\apps" -Force
-  Remove-Item $zip -ErrorAction SilentlyContinue
-  Write-Host "Adminer 4.8.1 addon installed. Restart WampServer to activate."
-} else {
-  # Standalone: place adminer.php in a web-accessible directory
-  $destDir = "$env:USERPROFILE\adminer"
-  New-Item -ItemType Directory -Force -Path $destDir | Out-Null
-  $url = "https://www.adminer.org/static/download/4.8.1/adminer-4.8.1.php"
-  Invoke-WebRequest -Uri $url -OutFile "$destDir\adminer.php" -UseBasicParsing
-  Write-Host "Adminer downloaded to $destDir\adminer.php"
-  Write-Host "Place it in your web server's document root to use it."
+$wampDir = 'C:\wamp64'
+if (-not (Test-Path (Join-Path $wampDir 'wampmanager.exe'))) {
+  Write-Error 'Adminer addon requires WampServer. Install WampServer first.'
+  exit 1
 }
+
+function Resolve-AdminerUrl {
+  $fallback = 'https://wampserver.aviatechno.net/files/adminer/wampserver3_x64_adminer5.4.2.exe'
+  try {
+    $base = [Uri]'https://wampserver.aviatechno.net/index.php?affiche=addons&lang=en'
+    $html = (Invoke-WebRequest -Uri $base.AbsoluteUri -UseBasicParsing -TimeoutSec 20).Content
+    $matches = [regex]::Matches($html, 'href="([^"]*wampserver3(?:_x64)?_adminer[\d.]+\.exe)"', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if ($matches.Count -gt 0) {
+      $href = $matches[$matches.Count - 1].Groups[1].Value
+      return [Uri]::new($base, $href).AbsoluteUri
+    }
+  } catch {
+    Write-Warning "Could not detect latest Adminer addon automatically: $_"
+  }
+  return $fallback
+}
+
+$url = Resolve-AdminerUrl
+$installer = Join-Path $env:TEMP 'wamp-adminer-addon.exe'
+Write-Host "Downloading Adminer addon..."
+Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
+
+Write-Host "Launching Adminer addon installer - follow the wizard..."
+Start-Process -FilePath $installer -Wait
+Remove-Item $installer -Force -ErrorAction SilentlyContinue
+
+Write-Host "Adminer addon installed. Restart WampServer to activate."

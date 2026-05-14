@@ -1,12 +1,18 @@
 #Requires -RunAsAdministrator
-Write-Host "Installing Git..."
-$release = Invoke-RestMethod "https://api.github.com/repos/git-for-windows/git/releases/latest"
-$asset = $release.assets | Where-Object { $_.name -match "Git-[\d.]+-64-bit\.exe" } | Select-Object -First 1
-if (-not $asset) { Write-Error "Could not find Git installer asset"; exit 1 }
-$installer = "$env:TEMP\git-setup.exe"
-Write-Host "Downloading $($asset.name)..."
+$ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# Source: Git for Windows official GitHub releases
+# https://github.com/git-for-windows/git/releases
+Write-Host "Downloading Git for Windows installer..."
+
+$release = Invoke-RestMethod 'https://api.github.com/repos/git-for-windows/git/releases/latest' -Headers @{ 'User-Agent' = 'devtoolshub' }
+$asset = $release.assets | Where-Object { $_.name -match '^Git-[\d.]+-64-bit\.exe$' } | Select-Object -First 1
+if (-not $asset) { throw 'Git installer asset not found' }
+
+$installer = Join-Path $env:TEMP 'git-setup.exe'
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $installer -UseBasicParsing
-Start-Process $installer -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS /COMPONENTS=icons,ext\reg\shellhere,assoc,assoc_sh" -Wait -NoNewWindow
-Remove-Item $installer -ErrorAction SilentlyContinue
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-Write-Host "Git installed: $(git --version)"
+
+Write-Host "Launching Git installer — configure options in the wizard..."
+Start-Process -FilePath $installer -Wait
+Remove-Item $installer -Force -ErrorAction SilentlyContinue

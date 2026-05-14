@@ -1,5 +1,3 @@
-export type Platform = 'windows' | 'macos' | 'linux'
-
 export type ToolCategory =
   | 'version-control'
   | 'runtime'
@@ -19,15 +17,12 @@ export interface Tool {
   name: string
   description: string
   category: ToolCategory
-  platforms: Platform[]
   version: string
   size: string
   icon: string
-  installers: Partial<Record<Platform, string>>
+  installer: string
   verifyCommand: string
   wingetId?: string
-  brewId?: string
-  aptId?: string
   pathHint?: string
   dependsOn?: string[]
 }
@@ -43,7 +38,6 @@ export interface ToolState {
 
 export interface InstallJob {
   toolId: string
-  platform: Platform
 }
 
 export interface InstallProgress {

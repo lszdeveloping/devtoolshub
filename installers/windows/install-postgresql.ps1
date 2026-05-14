@@ -1,10 +1,14 @@
 #Requires -RunAsAdministrator
-Write-Host "Installing PostgreSQL 16..."
-$url = "https://get.enterprisedb.com/postgresql/postgresql-16.6-1-windows-x64.exe"
-$installer = "$env:TEMP\postgresql-setup.exe"
-Write-Host "Downloading PostgreSQL 16.6..."
-Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
-Start-Process $installer -ArgumentList "--unattendedmodeui none --mode unattended --superpassword postgres --serverport 5432 --servicename postgresql-16" -Wait -NoNewWindow
-Remove-Item $installer -ErrorAction SilentlyContinue
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-Write-Host "PostgreSQL installed. Default password: postgres | Port: 5432"
+$ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# Source: official EnterpriseDB distribution recommended by postgresql.org for Windows
+# https://www.enterprisedb.com/downloads/postgres-postgresql-downloads
+Write-Host "Downloading PostgreSQL 16 installer..."
+
+$installer = Join-Path $env:TEMP 'postgresql-16.6-windows-x64.exe'
+Invoke-WebRequest -Uri 'https://get.enterprisedb.com/postgresql/postgresql-16.6-1-windows-x64.exe' -OutFile $installer -UseBasicParsing
+
+Write-Host "Launching PostgreSQL installer — set the superuser password, port and locale in the wizard..."
+Start-Process -FilePath $installer -Wait
+Remove-Item $installer -Force -ErrorAction SilentlyContinue

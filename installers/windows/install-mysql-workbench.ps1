@@ -1,9 +1,14 @@
 #Requires -RunAsAdministrator
-Write-Host "Installing MySQL Workbench 8.0..."
-$url = "https://dev.mysql.com/get/Downloads/MySQLGUITools/mysql-workbench-community-8.0.40-winx64.msi"
-$msi = "$env:TEMP\mysql-workbench-setup.msi"
-Write-Host "Downloading MySQL Workbench 8.0.40..."
-Invoke-WebRequest -Uri $url -OutFile $msi -UseBasicParsing
-Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /quiet /norestart" -Wait -NoNewWindow
-Remove-Item $msi -ErrorAction SilentlyContinue
-Write-Host "MySQL Workbench installed."
+$ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# Source: official MySQL Workbench Community CDN
+# https://dev.mysql.com/downloads/workbench/
+Write-Host "Downloading MySQL Workbench 8.0 installer..."
+
+$msi = Join-Path $env:TEMP 'mysql-workbench-8.0.40.msi'
+Invoke-WebRequest -Uri 'https://dev.mysql.com/get/Downloads/MySQLGUITools/mysql-workbench-community-8.0.40-winx64.msi' -OutFile $msi -UseBasicParsing
+
+Write-Host "Launching MySQL Workbench installer..."
+Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$msi`"") -Wait
+Remove-Item $msi -Force -ErrorAction SilentlyContinue

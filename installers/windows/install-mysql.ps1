@@ -1,28 +1,24 @@
 #Requires -RunAsAdministrator
-$ErrorActionPreference = "Stop"
-Write-Host "Installing MySQL 8.0..."
+$ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$wampDir = "C:\wamp64"
-$isWamp  = Test-Path "$wampDir\wampmanager.exe"
+# Source: official MySQL Community Server CDN
+# https://dev.mysql.com/downloads/mysql/
+Write-Host "Downloading MySQL 8.0 Community installer..."
 
-if ($isWamp) {
-  $mysqlBinDir = Get-ChildItem "$wampDir\bin\mysql" -ErrorAction SilentlyContinue |
-                 Where-Object { $_.PSIsContainer } |
-                 Sort-Object Name -Descending |
-                 Select-Object -First 1
-
-  if ($mysqlBinDir) {
-    Write-Host "WampServer detected - MySQL already present: $($mysqlBinDir.Name)"
-    Write-Host "Add '$($mysqlBinDir.FullName)\bin' to PATH if needed."
+$wampDir = 'C:\wamp64'
+if (Test-Path (Join-Path $wampDir 'wampmanager.exe')) {
+  $existing = Get-ChildItem (Join-Path $wampDir 'bin\mysql') -Directory -ErrorAction SilentlyContinue |
+              Sort-Object Name -Descending | Select-Object -First 1
+  if ($existing) {
+    Write-Host "WampServer detected - MySQL already bundled: $($existing.Name). Skipping standalone install."
     exit 0
   }
 }
 
-$url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-8.0.40-winx64.msi"
-$msi = "$env:TEMP\mysql-setup.msi"
-Write-Host "Downloading MySQL 8.0.40..."
-Invoke-WebRequest -Uri $url -OutFile $msi -UseBasicParsing
-Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /quiet /norestart" -Wait -NoNewWindow
-Remove-Item $msi -ErrorAction SilentlyContinue
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-Write-Host "MySQL installed."
+$msi = Join-Path $env:TEMP 'mysql-8.0.40.msi'
+Invoke-WebRequest -Uri 'https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-8.0.40-winx64.msi' -OutFile $msi -UseBasicParsing
+
+Write-Host "Launching MySQL Installer — configure root password and ports in the wizard..."
+Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$msi`"") -Wait
+Remove-Item $msi -Force -ErrorAction SilentlyContinue

@@ -1,5 +1,6 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect } from 'react'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { Loader2 } from 'lucide-react'
 import TitleBar from './components/TitleBar'
 import Sidebar from './components/Sidebar'
 import HomePage from './pages/HomePage'
@@ -23,7 +24,7 @@ function AppInner() {
         <main className="flex-1 overflow-auto bg-surface-950 relative">
           {detecting && (
             <div className="absolute top-3 right-4 z-10 flex items-center gap-2 bg-surface-800 border border-surface-700 rounded-lg px-3 py-1.5 text-xs text-slate-400 shadow">
-              <span className="animate-spin">⚙️</span>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Detecting installed tools...
             </div>
           )}

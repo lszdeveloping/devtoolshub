@@ -1,10 +1,21 @@
 #Requires -RunAsAdministrator
-Write-Host "Installing Python 3.12..."
-$url = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe"
-$installer = "$env:TEMP\python-setup.exe"
-Write-Host "Downloading Python 3.12.10..."
-Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
-Start-Process $installer -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 Include_doc=0" -Wait -NoNewWindow
-Remove-Item $installer -ErrorAction SilentlyContinue
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-Write-Host "Python installed: $(python --version)"
+$ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# Source: python.org official FTP directory
+# https://www.python.org/ftp/python/
+Write-Host "Downloading latest Python 3.12 installer..."
+
+$series  = '3.12'
+$listing = (Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/' -UseBasicParsing).Content
+$matches = [regex]::Matches($listing, "href=`"($([regex]::Escape($series))\.\d+)/`"")
+$version = $matches | ForEach-Object { $_.Groups[1].Value } |
+           Sort-Object { [Version]$_ } -Descending | Select-Object -First 1
+if (-not $version) { $version = '3.12.10' }
+
+$installer = Join-Path $env:TEMP "python-$version-amd64.exe"
+Invoke-WebRequest -Uri "https://www.python.org/ftp/python/$version/python-$version-amd64.exe" -OutFile $installer -UseBasicParsing
+
+Write-Host "Launching Python installer — configure options in the wizard..."
+Start-Process -FilePath $installer -Wait
+Remove-Item $installer -Force -ErrorAction SilentlyContinue

@@ -1,3 +1,10 @@
-Write-Host "Installing Yarn..."
-npm install -g yarn
-if ($LASTEXITCODE -eq 0) { Write-Host "Yarn installed: $(yarn --version)" } else { exit 1 }
+#Requires -RunAsAdministrator
+$ErrorActionPreference = 'Stop'
+
+# Source: official npm registry
+# https://www.npmjs.com/package/yarn
+Write-Host "Installing Yarn via npm..."
+
+& npm install -g yarn
+if ($LASTEXITCODE -ne 0) { throw 'npm install -g yarn failed; install Node.js first.' }
+Write-Host "Yarn installed: $(& yarn --version)"

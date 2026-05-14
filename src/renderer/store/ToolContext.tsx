@@ -1,9 +1,9 @@
 import {
   createContext, useContext, useReducer, useCallback,
-  useEffect, type ReactNode
+  type ReactNode
 } from 'react'
 import { TOOLS } from '../../shared/tools-data'
-import type { Tool, ToolState, InstallProgress, InstallResult, Platform } from '../../shared/types'
+import type { Tool, ToolState, InstallProgress, InstallResult } from '../../shared/types'
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -11,7 +11,6 @@ interface State {
   tools: Tool[]
   states: Record<string, ToolState>
   selected: Set<string>
-  platform: Platform
   detecting: boolean
 }
 
@@ -19,14 +18,12 @@ const initialState: State = {
   tools: TOOLS,
   states: {},
   selected: new Set(),
-  platform: 'windows',
   detecting: false,
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
 type Action =
-  | { type: 'SET_PLATFORM'; platform: Platform }
   | { type: 'SET_STATES'; states: ToolState[] }
   | { type: 'SET_TOOL_STATE'; state: ToolState }
   | { type: 'TOGGLE_SELECT'; id: string }
@@ -36,9 +33,6 @@ type Action =
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case 'SET_PLATFORM':
-      return { ...state, platform: action.platform }
-
     case 'SET_STATES': {
       const map: Record<string, ToolState> = { ...state.states }
       for (const s of action.states) map[s.id] = s
@@ -81,7 +75,6 @@ interface ContextValue {
   tools: Tool[]
   states: Record<string, ToolState>
   selected: Set<string>
-  platform: Platform
   detecting: boolean
   getState: (id: string) => ToolState
   detectTools: () => Promise<void>
@@ -100,19 +93,6 @@ const ToolContext = createContext<ContextValue | null>(null)
 export function ToolProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const hasApi = typeof window.api !== 'undefined'
-
-  // Detect platform on mount
-  useEffect(() => {
-    if (hasApi) {
-      window.api.getPlatform().then(p => dispatch({ type: 'SET_PLATFORM', platform: p }))
-    } else {
-      // Fallback: detect from userAgent
-      const ua = navigator.userAgent.toLowerCase()
-      const p: Platform = ua.includes('win') ? 'windows'
-        : ua.includes('mac') ? 'macos' : 'linux'
-      dispatch({ type: 'SET_PLATFORM', platform: p })
-    }
-  }, [hasApi])
 
   const detectTools = useCallback(async () => {
     if (!hasApi) return
@@ -143,7 +123,6 @@ export function ToolProvider({ children }: { children: ReactNode }) {
 
   const installSelected = useCallback(async (onProgress?: (p: InstallProgress) => void): Promise<InstallResult[]> => {
     if (!hasApi) return []
-    // Skip tools already marked as installed
     const ids = [...state.selected].filter(id => {
       const s = state.states[id]
       return !s || s.status !== 'installed'
@@ -153,20 +132,27 @@ export function ToolProvider({ children }: { children: ReactNode }) {
     let unsub: (() => void) | undefined
     if (onProgress) unsub = window.api.onProgress(onProgress)
 
-    for (const id of ids) {
-      dispatch({ type: 'SET_TOOL_STATE', state: { id, status: 'installing', progress: 0 } })
-      const result = await window.api.installTool(id)
-      dispatch({
-        type: 'SET_TOOL_STATE',
-        state: { id, status: result.success ? 'installed' : 'error', error: result.error },
-      })
-      if (result.success) {
-        dispatch({ type: 'TOGGLE_SELECT', id })
+    try {
+      for (const id of ids) {
+        dispatch({ type: 'SET_TOOL_STATE', state: { id, status: 'installing', progress: 0 } })
+        try {
+          const result = await window.api.installTool(id)
+          dispatch({
+            type: 'SET_TOOL_STATE',
+            state: { id, status: result.success ? 'installed' : 'error', error: result.error },
+          })
+          if (result.success) dispatch({ type: 'TOGGLE_SELECT', id })
+          results.push(result)
+        } catch (err) {
+          const message = (err as Error)?.message ?? 'Unknown error'
+          dispatch({ type: 'SET_TOOL_STATE', state: { id, status: 'error', error: message } })
+          results.push({ toolId: id, success: false, error: message })
+        }
       }
-      results.push(result)
+    } finally {
+      if (unsub) unsub()
     }
 
-    if (unsub) unsub()
     return results
   }, [hasApi, state.selected, state.states])
 
@@ -191,7 +177,6 @@ export function ToolProvider({ children }: { children: ReactNode }) {
       tools: state.tools,
       states: state.states,
       selected: state.selected,
-      platform: state.platform,
       detecting: state.detecting,
       getState,
       detectTools,

@@ -1,88 +1,99 @@
-import { app, BrowserWindow, ipcMain, shell, Menu, Tray, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, Menu, Tray, nativeImage, session } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
-import * as https from 'https'
 import * as os from 'os'
-import { spawn, exec } from 'child_process'
+import { spawn, exec, execSync } from 'child_process'
 import { promisify } from 'util'
 import { TOOLS as tools } from '../shared/tools-data'
-import type { InstallProgress, InstallResult, Platform, ToolState } from '../shared/types'
+import type { InstallProgress, InstallResult, ToolState } from '../shared/types'
 
 const execAsync = promisify(exec)
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
-const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/lszdeveloping/devtoolshub/main'
-
-function downloadScript(scriptPath: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const url = `${GITHUB_RAW_BASE}/${scriptPath.replace(/\\/g, '/')}`
-    const ext = path.extname(scriptPath)
-    const tmpFile = path.join(os.tmpdir(), `devtoolshub-${Date.now()}${ext}`)
-
-    const file = fs.createWriteStream(tmpFile)
-    https.get(url, (res) => {
-      if (res.statusCode !== 200) {
-        file.destroy()
-        fs.unlink(tmpFile, () => {})
-        reject(new Error(`Failed to download script (HTTP ${res.statusCode}): ${url}`))
-        return
-      }
-      res.pipe(file)
-      file.on('finish', () => file.close(() => resolve(tmpFile)))
-    }).on('error', (err) => {
-      file.destroy()
-      fs.unlink(tmpFile, () => {})
-      reject(err)
-    })
-  })
-}
 const isDev = !!DEV_SERVER_URL
 
-// Build enriched PATH for Windows — includes common install dirs not always in subprocess env
-function buildEnv(): NodeJS.ProcessEnv {
-  if (process.platform !== 'win32') return process.env
+if (process.platform !== 'win32') {
+  console.error('DevTools Hub supports Windows only.')
+  app.exit(1)
+}
 
-  const commonPaths = [
-    'C:\\Program Files\\Git\\cmd',
-    'C:\\Program Files\\Git\\bin',
-    'C:\\Program Files\\GitHub CLI',
-    'C:\\Program Files\\nodejs',
-    'C:\\Program Files (x86)\\nodejs',
-    `${process.env.APPDATA}\\npm`,
-    `${process.env.USERPROFILE}\\.cargo\\bin`,
-    `${process.env.USERPROFILE}\\.bun\\bin`,
-    `${process.env.USERPROFILE}\\.deno\\bin`,
-    `${process.env.LOCALAPPDATA}\\rtk\\bin`,
-    'C:\\Program Files\\Docker\\Docker\\resources\\bin',
-    'C:\\Program Files\\PostgreSQL\\16\\bin',
-    'C:\\Program Files\\PostgreSQL\\17\\bin',
-    'C:\\Program Files\\Redis',
-    'C:\\Program Files\\Microsoft VS Code\\bin',
-    'C:\\Program Files\\MongoDB\\Server\\7.0\\bin',
-    'C:\\Program Files\\MongoDB\\Server\\8.0\\bin',
-    'C:\\Program Files\\Go\\bin',
+// Resolve installer script path on disk. In dev: project root. In prod: asar.unpacked.
+function resolveInstaller(relPath: string): string | null {
+  const normalized = relPath.replace(/\\/g, '/').replace(/^\/+/, '')
+  const candidates: string[] = []
+
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
+  if (resourcesPath) {
+    candidates.push(
+      path.join(resourcesPath, 'app.asar.unpacked', normalized),
+      path.join(resourcesPath, normalized),
+      path.join(resourcesPath, 'app', normalized),
+    )
+  }
+  candidates.push(
+    path.resolve(__dirname, '../../', normalized),
+    path.resolve(process.cwd(), normalized),
+  )
+
+  return candidates.find(p => fs.existsSync(p)) ?? null
+}
+
+// Cached environment: enumerates real versioned dirs (PostgreSQL\17, MongoDB\Server\8.0, …)
+// instead of hardcoding versions. Also merges registry PATH so Electron sees fresh installs
+// without restart. Locale-independent via env vars.
+let cachedEnv: NodeJS.ProcessEnv | null = null
+
+function globVersionedDirs(parent: string, subdir: string): string[] {
+  try {
+    if (!fs.existsSync(parent)) return []
+    return fs.readdirSync(parent)
+      .map(name => path.join(parent, name, subdir))
+      .filter(p => fs.existsSync(p))
+  } catch { return [] }
+}
+
+function buildEnv(): NodeJS.ProcessEnv {
+  if (cachedEnv) return cachedEnv
+
+  const pf      = process.env.ProgramFiles      ?? 'C:\\Program Files'
+  const pf86    = process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)'
+  const local   = process.env.LOCALAPPDATA      ?? `${process.env.USERPROFILE}\\AppData\\Local`
+  const appdata = process.env.APPDATA           ?? `${process.env.USERPROFILE}\\AppData\\Roaming`
+  const user    = process.env.USERPROFILE       ?? ''
+  const sysroot = process.env.SystemRoot        ?? 'C:\\Windows'
+
+  const commonPaths: string[] = [
+    `${pf}\\Git\\cmd`,
+    `${pf}\\Git\\bin`,
+    `${pf}\\GitHub CLI`,
+    `${pf}\\nodejs`,
+    `${pf86}\\nodejs`,
+    `${appdata}\\npm`,
+    `${user}\\.cargo\\bin`,
+    `${user}\\.bun\\bin`,
+    `${user}\\.deno\\bin`,
+    `${local}\\rtk\\bin`,
+    `${pf}\\Docker\\Docker\\resources\\bin`,
+    `${pf}\\Redis`,
+    `${pf}\\Microsoft VS Code\\bin`,
+    `${pf}\\Go\\bin`,
     'C:\\Go\\bin',
     'C:\\PHP',
     'C:\\php',
-    'C:\\wamp64\\bin\\php\\php8.3',
-    'C:\\wamp64\\bin\\php\\php8.2',
-    'C:\\wamp64\\bin\\php\\php8.1',
-    'C:\\wamp64\\bin\\mysql\\mysql8.0\\bin',
-    'C:\\wamp64\\bin\\mariadb\\mariadb11.4\\bin',
-    'C:\\wamp64\\bin\\apache\\apache2.4\\bin',
-    'C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin',
-    'C:\\Program Files\\MySQL\\MySQL Server 8.4\\bin',
-    'C:\\Program Files\\MySQL\\MySQL Server 9.0\\bin',
-    'C:\\Program Files\\MySQL\\MySQL Server 9.1\\bin',
-    'C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn',
-    'C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\180\\Tools\\Binn',
-    'C:\\Program Files (x86)\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn',
-    // Read system + user PATH from registry to get the real values
+    `${sysroot}\\System32`,
+    ...globVersionedDirs(`${pf}\\PostgreSQL`, 'bin'),
+    ...globVersionedDirs(`${pf}\\MongoDB\\Server`, 'bin'),
+    ...globVersionedDirs(`${pf}\\MySQL`, 'bin'),
+    ...globVersionedDirs(`${pf86}\\Microsoft SQL Server\\Client SDK\\ODBC`, 'Tools\\Binn'),
+    ...globVersionedDirs(`${pf}\\Microsoft SQL Server\\Client SDK\\ODBC`, 'Tools\\Binn'),
+    ...globVersionedDirs('C:\\wamp64\\bin\\php', ''),
+    ...globVersionedDirs('C:\\wamp64\\bin\\mysql', 'bin'),
+    ...globVersionedDirs('C:\\wamp64\\bin\\mariadb', 'bin'),
+    ...globVersionedDirs('C:\\wamp64\\bin\\apache', 'bin'),
     ...(process.env.Path ?? '').split(';'),
     ...(process.env.PATH ?? '').split(';'),
   ]
-  // Also read the actual registry PATH (Electron may inherit stale PATH)
+
   try {
-    const { execSync } = require('child_process') as typeof import('child_process')
     const sysPATH = execSync(
       'powershell -NoProfile -Command "[System.Environment]::GetEnvironmentVariable(\'Path\',\'Machine\')"',
       { timeout: 3000, encoding: 'utf8' }
@@ -95,13 +106,12 @@ function buildEnv(): NodeJS.ProcessEnv {
   } catch { /* ignore */ }
 
   const dedupedPath = [...new Set(commonPaths.filter(Boolean))].join(';')
-  return { ...process.env, PATH: dedupedPath, Path: dedupedPath }
+  cachedEnv = { ...process.env, PATH: dedupedPath, Path: dedupedPath }
+  return cachedEnv
 }
 
-// Extract a clean version string from command output
 function parseVersion(raw: string): string {
   const text = raw.trim().split('\n')[0].trim()
-  // Try to extract a semver-like version number
   const match = text.match(/(\d+\.\d+[\.\d]*)/)
   return match ? match[1] : text.slice(0, 40)
 }
@@ -110,12 +120,11 @@ async function runDetect(cmd: string, env: NodeJS.ProcessEnv): Promise<string | 
   try {
     const { stdout, stderr } = await execAsync(cmd, {
       timeout: 8000,
-      shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/sh',
+      shell: 'cmd.exe',
       env,
       windowsHide: true,
       encoding: 'utf8',
     } as Parameters<typeof execAsync>[1])
-    // Some tools (java, go, deno) write version to stderr
     const out = (String(stdout || '') || String(stderr || '')).trim()
     return out || null
   } catch {
@@ -126,7 +135,6 @@ async function runDetect(cmd: string, env: NodeJS.ProcessEnv): Promise<string | 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 
-// Catch unhandled errors so the app doesn't silently crash
 process.on('uncaughtException', (err) => {
   console.error('[uncaughtException]', err)
 })
@@ -145,7 +153,7 @@ function createWindow() {
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   })
 
@@ -167,6 +175,15 @@ function createWindow() {
     return { action: 'deny' }
   })
 
+  // Block in-window navigation to external URLs; route them to the OS browser instead.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const isDevUrl = !!(DEV_SERVER_URL && url.startsWith(DEV_SERVER_URL))
+    if (!isDevUrl && !url.startsWith('file://')) {
+      event.preventDefault()
+      shell.openExternal(url)
+    }
+  })
+
   mainWindow.webContents.on('did-fail-load', (_e, code, desc) => {
     console.error('[renderer] Failed to load:', code, desc)
   })
@@ -180,10 +197,20 @@ function createWindow() {
   })
 }
 
+function resolveTrayIconPath(): string | null {
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
+  const candidates = [
+    path.join(__dirname, '../../resources/icon.png'),
+    resourcesPath ? path.join(resourcesPath, 'resources/icon.png') : '',
+    resourcesPath ? path.join(resourcesPath, 'app.asar.unpacked/resources/icon.png') : '',
+  ].filter(Boolean)
+  return candidates.find(p => fs.existsSync(p)) ?? null
+}
+
 function createTray() {
   try {
-    const iconPath = path.join(__dirname, '../../resources/icon.png')
-    if (!fs.existsSync(iconPath)) {
+    const iconPath = resolveTrayIconPath()
+    if (!iconPath) {
       console.warn('[tray] Icon not found, skipping tray creation')
       return
     }
@@ -202,7 +229,23 @@ function createTray() {
   }
 }
 
+function setupCsp() {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          isDev
+            ? "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: http://localhost:5173 ws://localhost:5173"
+            : "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; script-src 'self'",
+        ],
+      },
+    })
+  })
+}
+
 app.whenReady().then(() => {
+  setupCsp()
   createWindow()
   createTray()
   app.on('activate', () => {
@@ -213,10 +256,9 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  app.quit()
 })
 
-// Window controls
 ipcMain.on('window:minimize', () => mainWindow?.minimize())
 ipcMain.on('window:maximize', () => {
   if (mainWindow?.isMaximized()) mainWindow.unmaximize()
@@ -224,33 +266,21 @@ ipcMain.on('window:maximize', () => {
 })
 ipcMain.on('window:close', () => mainWindow?.close())
 
-// Get platform
-ipcMain.handle('app:platform', (): Platform => {
-  if (process.platform === 'win32') return 'windows'
-  if (process.platform === 'darwin') return 'macos'
-  return 'linux'
-})
-
-// Get all tools
 ipcMain.handle('tools:list', () => tools)
 
-// Detect installed tools
 ipcMain.handle('tools:detect', async (): Promise<ToolState[]> => {
   const env = buildEnv()
-  const states: ToolState[] = []
-
-  for (const tool of tools) {
-    const raw = await runDetect(tool.verifyCommand, env)
-    if (raw) {
-      states.push({ id: tool.id, status: 'installed', installedVersion: parseVersion(raw) })
-    } else {
-      states.push({ id: tool.id, status: 'not-installed' })
-    }
-  }
-  return states
+  const results = await Promise.all(
+    tools.map(async (tool): Promise<ToolState> => {
+      const raw = await runDetect(tool.verifyCommand, env)
+      return raw
+        ? { id: tool.id, status: 'installed', installedVersion: parseVersion(raw) }
+        : { id: tool.id, status: 'not-installed' }
+    })
+  )
+  return results
 })
 
-// ── Logging ───────────────────────────────────────────────────────────────────
 function getLogDir(): string {
   const dir = path.join(app.getPath('userData'), 'logs')
   fs.mkdirSync(dir, { recursive: true })
@@ -266,30 +296,23 @@ function createLogFile(toolId: string): { logPath: string; write: (line: string)
   return { logPath, write, close }
 }
 
-// Install a tool
-ipcMain.handle('tools:install', async (event, toolId: string): Promise<InstallResult> => {
+ipcMain.handle('tools:install', async (_event, toolId: string): Promise<InstallResult> => {
   const tool = tools.find(t => t.id === toolId)
   if (!tool) return { toolId, success: false, error: 'Tool not found' }
 
-  const platform: Platform = process.platform === 'win32' ? 'windows'
-    : process.platform === 'darwin' ? 'macos' : 'linux'
-
-  const scriptPath = tool.installers[platform]
-  if (!scriptPath) return { toolId, success: false, error: `No installer for ${platform}` }
-
-  let fullScriptPath: string
-  let tmpScriptPath: string | null = null
-
-  try {
-    tmpScriptPath = await downloadScript(scriptPath)
-    fullScriptPath = tmpScriptPath
-  } catch (downloadErr: unknown) {
-    return { toolId, success: false, error: `Download failed: ${(downloadErr as Error).message}` }
+  const scriptPath = resolveInstaller(tool.installer)
+  if (!scriptPath) {
+    return { toolId, success: false, error: `Installer script not found on disk: ${tool.installer}` }
   }
 
   const log = createLogFile(toolId)
-  log.write(`[START] tool=${toolId} platform=${platform}`)
-  log.write(`[SCRIPT] ${fullScriptPath} (downloaded from GitHub)`)
+  log.write(`[START] tool=${toolId}`)
+  log.write(`[SCRIPT] ${scriptPath}`)
+
+  // Tee file: Start-Process is detached (UAC elevation breaks stdout pipe to parent), so the
+  // wrapper writes a sibling .out file we tail from the main process for progress updates.
+  const teePath = path.join(os.tmpdir(), `devtoolshub-tee-${toolId}-${Date.now()}.txt`)
+  fs.writeFileSync(teePath, '', 'utf8')
 
   return new Promise((resolve) => {
     const sendProgress = (progress: number, message: string) => {
@@ -299,39 +322,42 @@ ipcMain.handle('tools:install', async (event, toolId: string): Promise<InstallRe
 
     sendProgress(10, `Preparing to install ${tool.name}...`)
 
-    let child: ReturnType<typeof spawn>
-    if (platform === 'windows') {
-      child = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-File', fullScriptPath], {
-        env: { ...process.env },
-      })
-    } else {
-      child = spawn('bash', [fullScriptPath], { env: { ...process.env } })
-    }
+    // Wrapper redirects the elevated script's stdout+stderr into teePath so we can stream it.
+    const escapedScript = scriptPath.replace(/'/g, "''")
+    const escapedTee    = teePath.replace(/'/g, "''")
+    const wrapper = `Start-Process powershell.exe -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','${escapedScript}' -Verb RunAs -Wait -RedirectStandardOutput '${escapedTee}' -RedirectStandardError '${escapedTee}'`
 
-    let errorOutput = ''
+    const child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', wrapper], {
+      env: process.env,
+      windowsHide: true,
+    })
+
+    let lastSize = 0
     let progressVal = 20
-
-    child.stdout?.on('data', (data: Buffer) => {
-      const raw = data.toString()
-      log.write(`[OUT] ${raw.trim()}`)
-      progressVal = Math.min(progressVal + 10, 90)
-      const msg = raw.trim().slice(0, 120).replace(/\bDownload(ing|ed)?\b/gi, 'Installing')
-      sendProgress(progressVal, msg)
-    })
-
-    child.stderr?.on('data', (data: Buffer) => {
-      const raw = data.toString()
-      log.write(`[ERR] ${raw.trim()}`)
-      errorOutput += raw
-      // Relay non-trivial stderr lines to progress UI
-      const line = raw.trim()
-      if (line && line.length > 3) {
-        sendProgress(progressVal, `⚠ ${line.slice(0, 120)}`)
-      }
-    })
+    const tail = setInterval(() => {
+      try {
+        const stat = fs.statSync(teePath)
+        if (stat.size > lastSize) {
+          const fd = fs.openSync(teePath, 'r')
+          const buf = Buffer.alloc(stat.size - lastSize)
+          fs.readSync(fd, buf, 0, buf.length, lastSize)
+          fs.closeSync(fd)
+          lastSize = stat.size
+          const chunk = buf.toString('utf8')
+          for (const line of chunk.split(/\r?\n/)) {
+            const trimmed = line.trim()
+            if (!trimmed) continue
+            log.write(`[OUT] ${trimmed}`)
+            progressVal = Math.min(progressVal + 5, 90)
+            sendProgress(progressVal, trimmed.slice(0, 120))
+          }
+        }
+      } catch { /* file may briefly disappear */ }
+    }, 500)
 
     const cleanup = () => {
-      if (tmpScriptPath) fs.unlink(tmpScriptPath, () => {})
+      clearInterval(tail)
+      fs.unlink(teePath, () => {})
     }
 
     child.on('close', (code) => {
@@ -342,8 +368,7 @@ ipcMain.handle('tools:install', async (event, toolId: string): Promise<InstallRe
         sendProgress(100, `${tool.name} installed successfully`)
         resolve({ toolId, success: true, logPath: log.logPath })
       } else {
-        const err = errorOutput.trim() || `Exit code ${code}`
-        resolve({ toolId, success: false, error: err, logPath: log.logPath })
+        resolve({ toolId, success: false, error: `Exit code ${code}`, logPath: log.logPath })
       }
     })
 
@@ -356,40 +381,30 @@ ipcMain.handle('tools:install', async (event, toolId: string): Promise<InstallRe
   })
 })
 
-// Uninstall a tool
 ipcMain.handle('tools:uninstall', async (_event, toolId: string): Promise<InstallResult> => {
   const tool = tools.find(t => t.id === toolId)
   if (!tool) return { toolId, success: false, error: 'Tool not found' }
+  if (!tool.wingetId) return { toolId, success: false, error: `No winget ID defined for ${tool.name}` }
 
+  // winget needs elevation for perMachine packages. Run via UAC and wait.
+  const escapedId = tool.wingetId.replace(/'/g, "''")
+  const cmd = `Start-Process winget -ArgumentList 'uninstall','--id','${escapedId}','--silent','--accept-source-agreements' -Verb RunAs -Wait -PassThru | Select-Object -ExpandProperty ExitCode`
   try {
-    const platform: Platform = process.platform === 'win32' ? 'windows'
-      : process.platform === 'darwin' ? 'macos' : 'linux'
-    if (platform === 'windows') {
-      const id = tool.wingetId
-      if (!id) return { toolId, success: false, error: `No winget ID defined for ${tool.name}` }
-      await execAsync(`winget uninstall --id "${id}" --silent`, { timeout: 60000 })
-    } else if (platform === 'macos') {
-      const id = tool.brewId
-      if (!id) return { toolId, success: false, error: `No brew ID defined for ${tool.name}` }
-      await execAsync(`brew uninstall ${id}`, { timeout: 60000 })
-    } else {
-      const id = tool.aptId
-      if (!id) return { toolId, success: false, error: `No apt ID defined for ${tool.name}` }
-      await execAsync(`sudo apt-get remove -y ${id}`, { timeout: 60000 })
-    }
-    return { toolId, success: true }
+    const { stdout } = await execAsync(
+      `powershell -NoProfile -ExecutionPolicy Bypass -Command "${cmd.replace(/"/g, '\\"')}"`,
+      { timeout: 120000, windowsHide: true } as Parameters<typeof execAsync>[1]
+    )
+    const code = parseInt(String(stdout).trim(), 10)
+    if (code === 0) return { toolId, success: true }
+    return { toolId, success: false, error: `winget exit ${code}` }
   } catch (e: unknown) {
     return { toolId, success: false, error: (e as Error).message }
   }
 })
 
-// Open external URL
 ipcMain.on('app:openUrl', (_event, url: string) => shell.openExternal(url))
-
-// Open local file/folder in default app
 ipcMain.on('app:openPath', (_event, filePath: string) => shell.openPath(filePath))
 
-// List install log files
 ipcMain.handle('logs:list', async (): Promise<{ name: string; path: string }[]> => {
   try {
     const dir = getLogDir()
@@ -401,16 +416,13 @@ ipcMain.handle('logs:list', async (): Promise<{ name: string; path: string }[]> 
   } catch { return [] }
 })
 
-// Export config
 ipcMain.handle('config:export', async (_event, toolIds: string[]): Promise<string> => {
   const config = { version: app.getVersion(), exportedAt: new Date().toISOString(), tools: toolIds }
   return JSON.stringify(config, null, 2)
 })
 
-// Get app version
 ipcMain.handle('app:version', () => app.getVersion())
 
-// Configure RTK integrations
 const RTK_AGENT_COMMANDS: Record<string, string> = {
   claude:      'rtk init -g',
   codex:       'rtk init -g --codex',
@@ -437,7 +449,7 @@ ipcMain.handle('rtk:configure', async (_event, agents: string[]): Promise<{
       await execAsync(cmd, {
         timeout: 30000,
         env,
-        shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/sh',
+        shell: 'cmd.exe',
         windowsHide: true,
       } as Parameters<typeof execAsync>[1])
       results.push({ agent, success: true })

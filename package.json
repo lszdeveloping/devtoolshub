@@ -1,7 +1,7 @@
 {
   "name": "devtoolshub",
   "version": "1.1.0",
-  "description": "DevTools Hub IDE - Installer & Manager for Windows, macOS and Linux",
+  "description": "DevTools Hub IDE - Installer & Manager for Windows",
   "main": "dist/main/main.js",
   "repository": {
     "type": "git",
@@ -34,6 +34,9 @@
   ],
   "author": "DevTools Hub Team",
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/react": "^18.0.0",
@@ -54,6 +57,7 @@
     "commander": "^12.0.0",
     "electron-log": "^5.0.0",
     "electron-updater": "^6.0.0",
+    "lucide-react": "^0.460.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-router-dom": "^6.0.0"
@@ -77,13 +81,10 @@
       "target": "nsis",
       "icon": "resources/icon.ico"
     },
-    "mac": {
-      "target": "dmg",
-      "icon": "resources/icon.icns"
-    },
-    "linux": {
-      "target": "AppImage",
-      "icon": "resources/icon.png"
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

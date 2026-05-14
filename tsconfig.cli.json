@@ -14,5 +14,5 @@
       "@shared/*": ["src/shared/*"]
     }
   },
-  "include": ["src/cli", "src/main/tools-registry.ts", "src/shared"]
+  "include": ["src/cli", "src/shared"]
 }

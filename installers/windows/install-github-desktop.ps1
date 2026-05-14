@@ -1,9 +1,14 @@
 #Requires -RunAsAdministrator
-Write-Host "Installing GitHub Desktop..."
-$url = "https://central.github.com/deployments/desktop/desktop/latest/win32"
-$installer = "$env:TEMP\GitHubDesktopSetup.exe"
-Write-Host "Downloading GitHub Desktop (latest)..."
-Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
-Start-Process $installer -ArgumentList "--silent" -Wait -NoNewWindow
-Remove-Item $installer -ErrorAction SilentlyContinue
-Write-Host "GitHub Desktop installed"
+$ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# Source: official GitHub Desktop latest Windows installer redirect
+# https://desktop.github.com/
+Write-Host "Downloading GitHub Desktop..."
+
+$installer = Join-Path $env:TEMP 'GitHubDesktopSetup.exe'
+Invoke-WebRequest -Uri 'https://central.github.com/deployments/desktop/desktop/latest/win32' -OutFile $installer -UseBasicParsing
+
+Write-Host "Launching GitHub Desktop installer..."
+Start-Process -FilePath $installer -Wait
+Remove-Item $installer -Force -ErrorAction SilentlyContinue

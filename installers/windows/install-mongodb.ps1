@@ -1,10 +1,14 @@
 #Requires -RunAsAdministrator
-Write-Host "Installing MongoDB 7.0 Community..."
-$url = "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-7.0.9-signed.msi"
-$msi = "$env:TEMP\mongodb-setup.msi"
-Write-Host "Downloading MongoDB 7.0.9..."
-Invoke-WebRequest -Uri $url -OutFile $msi -UseBasicParsing
-Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /quiet /norestart ADDLOCAL=ServerService,Client,MonitoringTools,ImportExportTools,MiscellaneousTools" -Wait -NoNewWindow
-Remove-Item $msi -ErrorAction SilentlyContinue
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-Write-Host "MongoDB installed"
+$ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# Source: official MongoDB CDN
+# https://www.mongodb.com/try/download/community
+Write-Host "Downloading MongoDB 7.0 Community installer..."
+
+$msi = Join-Path $env:TEMP 'mongodb-7.0.16.msi'
+Invoke-WebRequest -Uri 'https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-7.0.16-signed.msi' -OutFile $msi -UseBasicParsing
+
+Write-Host "Launching MongoDB installer — configure service options in the wizard..."
+Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$msi`"") -Wait
+Remove-Item $msi -Force -ErrorAction SilentlyContinue
