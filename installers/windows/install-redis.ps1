@@ -13,6 +13,6 @@ if (-not $asset) { throw 'Redis Windows MSI not found' }
 $msi = Join-Path $env:TEMP $asset.name
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $msi -UseBasicParsing
 
-Write-Host "Launching Redis installer — configure options in the wizard..."
+Write-Host "Launching Redis installer - configure options in the wizard..."
 Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$msi`"") -Wait
 Remove-Item $msi -Force -ErrorAction SilentlyContinue

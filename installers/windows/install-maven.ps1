@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 
 # Source: Apache Maven official CDN
 # https://maven.apache.org/download.cgi
-Write-Host "Downloading Apache Maven (zip-only — extracted programmatically)..."
+Write-Host "Downloading Apache Maven (zip-only - extracted programmatically)..."
 
 $meta = [xml](Invoke-WebRequest 'https://repo.maven.apache.org/maven2/org/apache/maven/maven-core/maven-metadata.xml' -UseBasicParsing).Content
 $version = ($meta.metadata.versioning.versions.version | Where-Object { $_ -match '^3\.\d+\.\d+$' } |

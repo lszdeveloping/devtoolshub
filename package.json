@@ -1,6 +1,6 @@
 {
   "name": "devtoolshub",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "DevTools Hub IDE - Installer & Manager for Windows",
   "main": "dist/main/main.js",
   "repository": {
@@ -67,13 +67,9 @@
     "productName": "DevTools Hub",
     "files": [
       "dist/**/*",
-      "installers/**/*",
       "resources/**/*"
     ],
     "asar": true,
-    "asarUnpack": [
-      "installers/**/*"
-    ],
     "directories": {
       "output": "release"
     },

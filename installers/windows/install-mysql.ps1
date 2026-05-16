@@ -19,6 +19,6 @@ if (Test-Path (Join-Path $wampDir 'wampmanager.exe')) {
 $msi = Join-Path $env:TEMP 'mysql-8.0.40.msi'
 Invoke-WebRequest -Uri 'https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-8.0.40-winx64.msi' -OutFile $msi -UseBasicParsing
 
-Write-Host "Launching MySQL Installer — configure root password and ports in the wizard..."
+Write-Host "Launching MySQL Installer - configure root password and ports in the wizard..."
 Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$msi`"") -Wait
 Remove-Item $msi -Force -ErrorAction SilentlyContinue

@@ -14,6 +14,6 @@ if (-not $file) { throw 'Go installer not found' }
 $msi = Join-Path $env:TEMP $file.filename
 Invoke-WebRequest -Uri "https://go.dev/dl/$($file.filename)" -OutFile $msi -UseBasicParsing
 
-Write-Host "Launching Go installer — configure options in the wizard..."
+Write-Host "Launching Go installer - configure options in the wizard..."
 Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$msi`"") -Wait
 Remove-Item $msi -Force -ErrorAction SilentlyContinue

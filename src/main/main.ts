@@ -16,25 +16,38 @@ if (process.platform !== 'win32') {
   app.exit(1)
 }
 
-// Resolve installer script path on disk. In dev: project root. In prod: asar.unpacked.
-function resolveInstaller(relPath: string): string | null {
-  const normalized = relPath.replace(/\\/g, '/').replace(/^\/+/, '')
-  const candidates: string[] = []
+// Installer scripts are fetched fresh from GitHub at install time. Avoids asar.unpacked
+// path resolution issues across install layouts (perMachine NSIS, portable, dev) and lets
+// us ship installer fixes without a full app update. Repo + branch are pinned.
+const INSTALLER_BASE_URL = 'https://raw.githubusercontent.com/lszdeveloping/devtoolshub/main/'
 
-  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
-  if (resourcesPath) {
-    candidates.push(
-      path.join(resourcesPath, 'app.asar.unpacked', normalized),
-      path.join(resourcesPath, normalized),
-      path.join(resourcesPath, 'app', normalized),
-    )
-  }
-  candidates.push(
-    path.resolve(__dirname, '../../', normalized),
-    path.resolve(process.cwd(), normalized),
-  )
+function downloadInstaller(relPath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const normalized = relPath.replace(/\\/g, '/').replace(/^\/+/, '')
+    const url = INSTALLER_BASE_URL + normalized
+    const filename = path.basename(normalized)
+    const destDir = path.join(os.tmpdir(), 'devtoolshub-installers')
+    try { fs.mkdirSync(destDir, { recursive: true }) } catch { /* ignore */ }
+    const dest = path.join(destDir, `${Date.now()}-${filename}`)
 
-  return candidates.find(p => fs.existsSync(p)) ?? null
+    const escapedUrl = url.replace(/'/g, "''")
+    const escapedDest = dest.replace(/'/g, "''")
+    const psCmd = `[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '${escapedUrl}' -OutFile '${escapedDest}' -UseBasicParsing -TimeoutSec 60`
+
+    const proc = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCmd], {
+      windowsHide: true,
+    })
+    let stderr = ''
+    proc.stderr?.on('data', d => { stderr += d.toString() })
+    proc.on('close', code => {
+      if (code === 0 && fs.existsSync(dest) && fs.statSync(dest).size > 0) {
+        resolve(dest)
+      } else {
+        reject(new Error(`Download failed (exit ${code}): ${stderr.trim() || url}`))
+      }
+    })
+    proc.on('error', err => reject(err))
+  })
 }
 
 // Cached environment: enumerates real versioned dirs (PostgreSQL\17, MongoDB\Server\8.0, …)
@@ -300,13 +313,20 @@ ipcMain.handle('tools:install', async (_event, toolId: string): Promise<InstallR
   const tool = tools.find(t => t.id === toolId)
   if (!tool) return { toolId, success: false, error: 'Tool not found' }
 
-  const scriptPath = resolveInstaller(tool.installer)
-  if (!scriptPath) {
-    return { toolId, success: false, error: `Installer script not found on disk: ${tool.installer}` }
-  }
-
   const log = createLogFile(toolId)
   log.write(`[START] tool=${toolId}`)
+
+  let scriptPath: string
+  try {
+    scriptPath = await downloadInstaller(tool.installer)
+    log.write(`[DOWNLOAD] ${scriptPath}`)
+  } catch (err) {
+    const message = (err as Error).message
+    log.write(`[DOWNLOAD_ERROR] ${message}`)
+    log.close()
+    return { toolId, success: false, error: `Failed to download installer: ${message}`, logPath: log.logPath }
+  }
+
   log.write(`[SCRIPT] ${scriptPath}`)
 
   // Tee file: Start-Process is detached (UAC elevation breaks stdout pipe to parent), so the
@@ -322,10 +342,13 @@ ipcMain.handle('tools:install', async (_event, toolId: string): Promise<InstallR
 
     sendProgress(10, `Preparing to install ${tool.name}...`)
 
-    // Wrapper redirects the elevated script's stdout+stderr into teePath so we can stream it.
+    // Windows forbids combining -Verb RunAs with -RedirectStandardOutput/Error on Start-Process.
+    // Instead, the elevated PowerShell runs the script piped through Tee-Object so stdout+stderr
+    // are written to teePath from inside the elevated context.
     const escapedScript = scriptPath.replace(/'/g, "''")
     const escapedTee    = teePath.replace(/'/g, "''")
-    const wrapper = `Start-Process powershell.exe -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','${escapedScript}' -Verb RunAs -Wait -RedirectStandardOutput '${escapedTee}' -RedirectStandardError '${escapedTee}'`
+    const innerCmd = `& '${escapedScript}' *>&1 | Tee-Object -FilePath '${escapedTee}'`
+    const wrapper = `Start-Process powershell.exe -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-Command',"${innerCmd}" -Verb RunAs -Wait`
 
     const child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', wrapper], {
       env: process.env,
@@ -358,6 +381,7 @@ ipcMain.handle('tools:install', async (_event, toolId: string): Promise<InstallR
     const cleanup = () => {
       clearInterval(tail)
       fs.unlink(teePath, () => {})
+      fs.unlink(scriptPath, () => {})
     }
 
     child.on('close', (code) => {

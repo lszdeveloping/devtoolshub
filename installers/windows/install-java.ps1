@@ -12,6 +12,6 @@ if (-not $release[0].binary.installer) { throw 'Adoptium installer asset not fou
 $msi = Join-Path $env:TEMP 'jdk21-setup.msi'
 Invoke-WebRequest -Uri $release[0].binary.installer.link -OutFile $msi -UseBasicParsing
 
-Write-Host "Launching JDK 21 installer — configure options in the wizard..."
+Write-Host "Launching JDK 21 installer - configure options in the wizard..."
 Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$msi`"") -Wait
 Remove-Item $msi -Force -ErrorAction SilentlyContinue

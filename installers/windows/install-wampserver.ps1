@@ -37,10 +37,10 @@ $dest = Join-Path $env:TEMP 'wampserver3.4.0_x64.exe'
 try {
   Invoke-WebRequest -Uri 'https://wampserver.aviatechno.net/files/install/wampserver3.4.0_x64.exe' -OutFile $dest -UseBasicParsing
 } catch {
-  Write-Warning "Primary mirror failed: $_ — trying SourceForge..."
+  Write-Warning "Primary mirror failed: $_ - trying SourceForge..."
   Invoke-WebRequest -Uri 'https://sourceforge.net/projects/wampserver/files/latest/download' -OutFile $dest -UseBasicParsing
 }
 
-Write-Host "Launching WampServer installer — configure install path and browser/editor in the wizard..."
+Write-Host "Launching WampServer installer - configure install path and browser/editor in the wizard..."
 Start-Process -FilePath $dest -Wait
 Remove-Item $dest -Force -ErrorAction SilentlyContinue

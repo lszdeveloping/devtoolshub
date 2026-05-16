@@ -9,7 +9,7 @@ Write-Host "Downloading Docker Desktop installer..."
 $installer = Join-Path $env:TEMP 'DockerDesktopInstaller.exe'
 Invoke-WebRequest -Uri 'https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe' -OutFile $installer -UseBasicParsing
 
-Write-Host "Launching Docker Desktop installer — configure options in the wizard..."
+Write-Host "Launching Docker Desktop installer - configure options in the wizard..."
 Start-Process -FilePath $installer -ArgumentList 'install' -Wait
 Remove-Item $installer -Force -ErrorAction SilentlyContinue
 

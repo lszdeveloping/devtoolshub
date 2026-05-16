@@ -9,6 +9,6 @@ Write-Host "Downloading rustup-init.exe..."
 $installer = Join-Path $env:TEMP 'rustup-init.exe'
 Invoke-WebRequest -Uri 'https://win.rustup.rs/x86_64' -OutFile $installer -UseBasicParsing
 
-Write-Host "Launching rustup — choose toolchain options interactively..."
+Write-Host "Launching rustup - choose toolchain options interactively..."
 Start-Process -FilePath $installer -Wait
 Remove-Item $installer -Force -ErrorAction SilentlyContinue

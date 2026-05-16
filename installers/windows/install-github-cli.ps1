@@ -13,7 +13,7 @@ if (-not $asset) { throw 'GitHub CLI MSI not found' }
 $msi = Join-Path $env:TEMP $asset.name
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $msi -UseBasicParsing
 
-Write-Host "Launching GitHub CLI installer — configure options in the wizard..."
+Write-Host "Launching GitHub CLI installer - configure options in the wizard..."
 Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$msi`"") -Wait
 Remove-Item $msi -Force -ErrorAction SilentlyContinue
 

@@ -16,6 +16,6 @@ if (-not $version) { $version = '3.12.10' }
 $installer = Join-Path $env:TEMP "python-$version-amd64.exe"
 Invoke-WebRequest -Uri "https://www.python.org/ftp/python/$version/python-$version-amd64.exe" -OutFile $installer -UseBasicParsing
 
-Write-Host "Launching Python installer — configure options in the wizard..."
+Write-Host "Launching Python installer - configure options in the wizard..."
 Start-Process -FilePath $installer -Wait
 Remove-Item $installer -Force -ErrorAction SilentlyContinue

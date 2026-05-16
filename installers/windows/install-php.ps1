@@ -27,7 +27,7 @@ if (Test-Path (Join-Path $wampDir 'wampmanager.exe')) {
   return
 }
 
-# Standalone PHP — zip-only, no GUI installer
+# Standalone PHP - zip-only, no GUI installer
 $phpDir = 'C:\PHP'
 $page   = (Invoke-WebRequest -Uri 'https://windows.php.net/downloads/releases/' -UseBasicParsing -TimeoutSec 20).Content
 $matches = [regex]::Matches($page, '(?<=href=")/downloads/releases/(php-8\.\d+\.\d+-nts-Win32-vs\d+-x64\.zip)')

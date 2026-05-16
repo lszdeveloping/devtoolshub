@@ -27,6 +27,6 @@ if (-not $file) { throw 'MariaDB MSI not found' }
 $msi = Join-Path $env:TEMP "mariadb-$($latest.release_id).msi"
 Invoke-WebRequest -Uri $file.file_download_url -OutFile $msi -UseBasicParsing
 
-Write-Host "Launching MariaDB installer — configure root password and ports in the wizard..."
+Write-Host "Launching MariaDB installer - configure root password and ports in the wizard..."
 Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$msi`"") -Wait
 Remove-Item $msi -Force -ErrorAction SilentlyContinue

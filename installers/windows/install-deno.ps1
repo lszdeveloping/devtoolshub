@@ -2,7 +2,7 @@
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-# Source: official Deno GitHub releases (zip-only — no GUI installer exists)
+# Source: official Deno GitHub releases (zip-only - no GUI installer exists)
 # https://github.com/denoland/deno/releases
 Write-Host "Downloading Deno..."
 

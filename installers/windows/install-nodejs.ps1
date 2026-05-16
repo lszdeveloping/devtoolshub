@@ -14,6 +14,6 @@ $version = $lts.version
 $msi = Join-Path $env:TEMP "node-$version.msi"
 Invoke-WebRequest -Uri "https://nodejs.org/dist/$version/node-$version-x64.msi" -OutFile $msi -UseBasicParsing
 
-Write-Host "Launching Node.js installer — configure options in the wizard..."
+Write-Host "Launching Node.js installer - configure options in the wizard..."
 Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$msi`"") -Wait
 Remove-Item $msi -Force -ErrorAction SilentlyContinue

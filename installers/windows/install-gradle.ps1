@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 
 # Source: official Gradle version service
 # https://services.gradle.org/versions/current
-Write-Host "Downloading Gradle (zip-only — extracted programmatically)..."
+Write-Host "Downloading Gradle (zip-only - extracted programmatically)..."
 
 $current = Invoke-RestMethod 'https://services.gradle.org/versions/current'
 if (-not $current.version -or -not $current.downloadUrl) { throw 'Gradle metadata missing' }

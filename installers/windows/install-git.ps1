@@ -13,6 +13,6 @@ if (-not $asset) { throw 'Git installer asset not found' }
 $installer = Join-Path $env:TEMP 'git-setup.exe'
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $installer -UseBasicParsing
 
-Write-Host "Launching Git installer — configure options in the wizard..."
+Write-Host "Launching Git installer - configure options in the wizard..."
 Start-Process -FilePath $installer -Wait
 Remove-Item $installer -Force -ErrorAction SilentlyContinue
